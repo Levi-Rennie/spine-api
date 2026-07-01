@@ -13,8 +13,8 @@ import { DatabaseService } from './database.service';
 const createItemSchema = z.object({
   member_id: z.number().int().positive(),
   book_title: z.string().min(1),
-  borrowed_on: z.string(),
-  due_on: z.string(),
+  borrowed_on: z.string().date(),
+  due_on: z.string().date(),
 });
 
 @Controller()
