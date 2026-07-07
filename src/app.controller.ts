@@ -4,6 +4,7 @@ import {
   Param,
   Post,
   Delete,
+  Patch,
   Body,
   BadRequestException,
   NotFoundException,
@@ -16,6 +17,10 @@ const createItemSchema = z.object({
   member_id: z.number().int().positive(),
   book_title: z.string().min(1),
   borrowed_on: z.string().date(),
+  due_on: z.string().date(),
+});
+
+const editLoanSchema = z.object({
   due_on: z.string().date(),
 });
 
@@ -77,6 +82,27 @@ export class AppController {
        RETURNING loan_id, member_id, book_title, borrowed_on, due_on`,
       [member_id, book_title, borrowed_on, due_on],
     );
+
+    return rows[0];
+  }
+
+  @Patch('items/:id')
+  async editLoan(@Param('id') id: string, @Body() body: unknown) {
+    const parsed = editLoanSchema.safeParse(body);
+
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.issues);
+    }
+
+    const rows = await this.databaseService.query(
+      `UPDATE loans SET due_on = $1 WHERE loan_id = $2
+       RETURNING loan_id, member_id, book_title, borrowed_on, due_on`,
+      [parsed.data.due_on, Number(id)],
+    );
+
+    if (rows.length === 0) {
+      throw new NotFoundException(`Loan ${id} not found`);
+    }
 
     return rows[0];
   }
