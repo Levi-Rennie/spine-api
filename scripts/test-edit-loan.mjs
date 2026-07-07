@@ -30,10 +30,29 @@ async function patchLoan(id, body) {
   return { status: res.status, data };
 }
 
+// Setup: create a loan to edit, so the test doesn't depend on existing data
+async function createTestLoan() {
+  const res = await fetch(`${BASE}/items`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      member_id: 17,
+      book_title: "Test Loan (edit script)",
+      borrowed_on: "2026-07-01",
+      due_on: "2026-07-21",
+    }),
+  });
+  if (res.status !== 201 && res.status !== 200) {
+    throw new Error(`Setup failed: could not create test loan (status ${res.status})`);
+  }
+  const loan = await res.json();
+  return loan.loan_id;
+}
+
 // Case 1: valid edit returns 200 with the updated loan
-async function testValidEdit() {
+async function testValidEdit(loanId) {
   const newDate = "2026-08-01";
-  const { status, data } = await patchLoan(85, { due_on: newDate });
+  const { status, data } = await patchLoan(loanId, { due_on: newDate });
 
   if (status !== 200) {
     return report("valid edit returns 200", false, `got status ${status}`);
@@ -45,20 +64,23 @@ async function testValidEdit() {
       "response has no due_on field"
     );
   }
-  // due_on may come back as a full ISO timestamp, so just check it starts with the date
-  if (!String(data.due_on).startsWith(newDate)) {
+  // due_on comes back as a JS Date serialized to UTC (pg parses DATE columns
+  // as local midnight). Compare the date in local time, same as the UI does.
+  const d = new Date(data.due_on);
+  const localDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  if (localDate !== newDate) {
     return report(
       "valid edit returns 200",
       false,
-      `due_on is ${data.due_on}, expected ${newDate}`
+      `due_on is ${data.due_on} (local ${localDate}), expected ${newDate}`
     );
   }
   report("valid edit returns 200 with updated loan", true);
 }
 
 // Case 2: invalid body is rejected with 400
-async function testInvalidBody() {
-  const { status } = await patchLoan(85, { due_on: "banana" });
+async function testInvalidBody(loanId) {
+  const { status } = await patchLoan(loanId, { due_on: "banana" });
   report(
     "invalid due_on returns 400",
     status === 400,
@@ -77,8 +99,10 @@ async function testMissingLoan() {
 }
 
 try {
-  await testValidEdit();
-  await testInvalidBody();
+  const loanId = await createTestLoan();
+  console.log(`(setup: created test loan ${loanId})\n`);
+  await testValidEdit(loanId);
+  await testInvalidBody(loanId);
   await testMissingLoan();
 } catch (err) {
   console.error("Could not reach the API — is spine-api running on :3000?");
