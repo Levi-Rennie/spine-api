@@ -3,8 +3,10 @@ import {
   Get,
   Param,
   Post,
+  Delete,
   Body,
   BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import { z } from 'zod';
 import { AppService } from './app.service';
@@ -77,5 +79,19 @@ export class AppController {
     );
 
     return rows[0];
+  }
+
+  @Delete('items/:id')
+  async deleteItem(@Param('id') id: string) {
+    const result = await this.databaseService.query(
+      'DELETE FROM loans WHERE loan_id = $1 RETURNING loan_id',
+      [Number(id)],
+    );
+
+    if (result.length === 0) {
+      throw new NotFoundException(`Loan ${id} not found`);
+    }
+
+    return { deleted: Number(id) };
   }
 }
