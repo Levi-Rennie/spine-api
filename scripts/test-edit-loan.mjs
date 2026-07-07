@@ -33,24 +33,24 @@ async function patchLoan(id, body) {
 // Case 1: valid edit returns 200 with the updated loan
 async function testValidEdit() {
   const newDate = "2026-08-01";
-  const { status, data } = await patchLoan(85, { due_date: newDate });
+  const { status, data } = await patchLoan(85, { due_on: newDate });
 
   if (status !== 200) {
     return report("valid edit returns 200", false, `got status ${status}`);
   }
-  if (!data || data.due_date === undefined) {
+  if (!data || data.due_on === undefined) {
     return report(
       "valid edit returns 200",
       false,
-      "response has no due_date field"
+      "response has no due_on field"
     );
   }
-  // due_date may come back as a full ISO timestamp, so just check it starts with the date
-  if (!String(data.due_date).startsWith(newDate)) {
+  // due_on may come back as a full ISO timestamp, so just check it starts with the date
+  if (!String(data.due_on).startsWith(newDate)) {
     return report(
       "valid edit returns 200",
       false,
-      `due_date is ${data.due_date}, expected ${newDate}`
+      `due_on is ${data.due_on}, expected ${newDate}`
     );
   }
   report("valid edit returns 200 with updated loan", true);
@@ -58,9 +58,9 @@ async function testValidEdit() {
 
 // Case 2: invalid body is rejected with 400
 async function testInvalidBody() {
-  const { status } = await patchLoan(85, { due_date: "banana" });
+  const { status } = await patchLoan(85, { due_on: "banana" });
   report(
-    "invalid due_date returns 400",
+    "invalid due_on returns 400",
     status === 400,
     `got status ${status}`
   );
@@ -68,7 +68,7 @@ async function testInvalidBody() {
 
 // Case 3: nonexistent loan returns 404
 async function testMissingLoan() {
-  const { status } = await patchLoan(99999, { due_date: "2026-08-01" });
+  const { status } = await patchLoan(99999, { due_on: "2026-08-01" });
   report(
     "nonexistent loan returns 404",
     status === 404,
