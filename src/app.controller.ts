@@ -8,6 +8,7 @@ import {
   Body,
   BadRequestException,
   NotFoundException,
+  ConflictException,
 } from '@nestjs/common';
 import { z } from 'zod';
 import { AppService } from './app.service';
@@ -44,7 +45,7 @@ export class AppController {
   @Get('items')
   async getItems() {
     const result = await this.databaseService.query(
-      `SELECT l.loan_id, l.book_title, l.borrowed_on, l.due_on,
+      `SELECT l.loan_id, l.book_title, l.borrowed_on, l.due_on, l.returned_on,
               m.member_id, m.full_name, m.email
        FROM loans l
        JOIN members m ON l.member_id = m.member_id
@@ -56,7 +57,7 @@ export class AppController {
   @Get('items/:id')
   async getItem(@Param('id') id: string) {
     const result = await this.databaseService.query(
-      `SELECT l.loan_id, l.book_title, l.borrowed_on, l.due_on,
+      `SELECT l.loan_id, l.book_title, l.borrowed_on, l.due_on, l.returned_on,
               m.member_id, m.full_name, m.email
        FROM loans l
        JOIN members m ON l.member_id = m.member_id
@@ -79,7 +80,7 @@ export class AppController {
     const rows = await this.databaseService.query(
       `INSERT INTO loans (member_id, book_title, borrowed_on, due_on)
        VALUES ($1, $2, $3, $4)
-       RETURNING loan_id, member_id, book_title, borrowed_on, due_on`,
+       RETURNING loan_id, member_id, book_title, borrowed_on, due_on, returned_on`,
       [member_id, book_title, borrowed_on, due_on],
     );
 
@@ -96,13 +97,38 @@ export class AppController {
 
     const rows = await this.databaseService.query(
       `UPDATE loans SET due_on = $1 WHERE loan_id = $2
-       RETURNING loan_id, member_id, book_title, borrowed_on, due_on`,
+       RETURNING loan_id, member_id, book_title, borrowed_on, due_on, returned_on`,
       [parsed.data.due_on, Number(id)],
     );
 
     if (rows.length === 0) {
       throw new NotFoundException(`Loan ${id} not found`);
     }
+
+    return rows[0];
+  }
+
+  @Patch('items/:id/return')
+  async returnLoan(@Param('id') id: string) {
+    const loanId = Number(id);
+
+    const existing = await this.databaseService.query<{
+      loan_id: number;
+      returned_on: string | null;
+    }>('SELECT loan_id, returned_on FROM loans WHERE loan_id = $1', [loanId]);
+
+    if (existing.length === 0) {
+      throw new NotFoundException(`Loan ${id} not found`);
+    }
+    if (existing[0].returned_on !== null) {
+      throw new ConflictException(`Loan ${id} has already been returned`);
+    }
+
+    const rows = await this.databaseService.query(
+      `UPDATE loans SET returned_on = CURRENT_DATE WHERE loan_id = $1
+       RETURNING loan_id, member_id, book_title, borrowed_on, due_on, returned_on`,
+      [loanId],
+    );
 
     return rows[0];
   }
