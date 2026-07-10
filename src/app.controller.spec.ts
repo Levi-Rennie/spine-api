@@ -71,4 +71,49 @@ describe('AppController', () => {
       expect(query).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('unreturnLoan', () => {
+    it('clears the return date for a returned loan', async () => {
+      query
+        .mockResolvedValueOnce([{ loan_id: 1, returned_on: '2026-07-01' }]) // lookup
+        .mockResolvedValueOnce([
+          { loan_id: 1, book_title: 'Dune', returned_on: null },
+        ]); // update
+
+      const result = await appController.unreturnLoan('1');
+
+      expect(result).toEqual({
+        loan_id: 1,
+        book_title: 'Dune',
+        returned_on: null,
+      });
+      // second call is the UPDATE ... SET returned_on = NULL
+      expect(query).toHaveBeenCalledTimes(2);
+      expect(query).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining('returned_on = NULL'),
+        [1],
+      );
+    });
+
+    it('rejects undo with 409 when the loan is not returned', async () => {
+      // loan exists but is still out (never returned)
+      query.mockResolvedValueOnce([{ loan_id: 1, returned_on: null }]);
+
+      await expect(appController.unreturnLoan('1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      // no UPDATE should be attempted
+      expect(query).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns 404 for an unknown loan id', async () => {
+      query.mockResolvedValueOnce([]); // lookup finds nothing
+
+      await expect(appController.unreturnLoan('999')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(query).toHaveBeenCalledTimes(1);
+    });
+  });
 });

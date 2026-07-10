@@ -133,6 +133,31 @@ export class AppController {
     return rows[0];
   }
 
+  @Delete('items/:id/return')
+  async unreturnLoan(@Param('id') id: string) {
+    const loanId = Number(id);
+
+    const existing = await this.databaseService.query<{
+      loan_id: number;
+      returned_on: string | null;
+    }>('SELECT loan_id, returned_on FROM loans WHERE loan_id = $1', [loanId]);
+
+    if (existing.length === 0) {
+      throw new NotFoundException(`Loan ${id} not found`);
+    }
+    if (existing[0].returned_on === null) {
+      throw new ConflictException(`Loan ${id} is not marked as returned`);
+    }
+
+    const rows = await this.databaseService.query(
+      `UPDATE loans SET returned_on = NULL WHERE loan_id = $1
+       RETURNING loan_id, member_id, book_title, borrowed_on, due_on, returned_on`,
+      [loanId],
+    );
+
+    return rows[0];
+  }
+
   @Delete('items/:id')
   async deleteItem(@Param('id') id: string) {
     const result = await this.databaseService.query(
